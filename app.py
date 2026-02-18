@@ -3,7 +3,6 @@ import cv2
 import torch
 import numpy as np
 import segmentation_models_pytorch as smp
-import time
 import base64
 import os
 
@@ -18,9 +17,11 @@ st.set_page_config(
 )
 
 # -------------------------
-# Background Video
+# Background Video Loader
 # -------------------------
 def get_base64_video(video_path):
+    if not os.path.exists(video_path):
+        return ""
     with open(video_path, "rb") as f:
         data = f.read()
     return base64.b64encode(data).decode()
@@ -28,6 +29,9 @@ def get_base64_video(video_path):
 bg_video_path = os.path.join(os.path.dirname(__file__), "IMG_9619.mp4")
 bg_video_base64 = get_base64_video(bg_video_path)
 
+# -------------------------
+# CSS + Video Background
+# -------------------------
 st.markdown(f"""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
@@ -47,13 +51,11 @@ st.markdown(f"""
     z-index: -1;
 }}
 
-/* Hide sidebar */
 section[data-testid="stSidebar"] {{ display: none !important; }}
 button[data-testid="stSidebarCollapsedControl"] {{ display: none !important; }}
 header[data-testid="stHeader"] {{ background: transparent !important; }}
 footer {{ display: none !important; }}
 
-/* Hero */
 .hero-container {{
     text-align: center;
     padding: 3rem 2rem;
@@ -62,17 +64,18 @@ footer {{ display: none !important; }}
     backdrop-filter: blur(15px);
     margin-bottom: 2rem;
 }}
+
 .hero-title {{
     font-size: 3rem;
     font-weight: 800;
     color: white;
 }}
+
 .hero-subtitle {{
     font-size: 1.1rem;
     color: #e2e8f0;
 }}
 
-/* Metric Cards */
 .stats-row {{
     display: flex;
     justify-content: center;
@@ -105,7 +108,6 @@ footer {{ display: none !important; }}
     letter-spacing: 1px;
 }}
 
-/* Result Cards */
 .result-card {{
     background: rgba(0,0,0,0.65);
     border-radius: 20px;
@@ -119,7 +121,6 @@ footer {{ display: none !important; }}
     color: white;
     margin-bottom: 1rem;
 }}
-
 </style>
 
 <video autoplay loop muted playsinline id="bg-video">
@@ -142,9 +143,13 @@ def load_model():
         classes=1
     ).to(DEVICE)
 
-    model.load_state_dict(
-        torch.load("nerve_model.pth", map_location=DEVICE)
-    )
+    model_path = os.path.join(os.path.dirname(__file__), "nerve_model.pth")
+
+    if not os.path.exists(model_path):
+        st.error("❌ nerve_model.pth not found")
+        st.stop()
+
+    model.load_state_dict(torch.load(model_path, map_location=DEVICE))
     model.eval()
     return model
 
@@ -171,8 +176,10 @@ uploaded_file = st.file_uploader(
     label_visibility="collapsed"
 )
 
+# -------------------------
+# Prediction Pipeline
+# -------------------------
 if uploaded_file:
-
     file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
     img = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
 
@@ -203,7 +210,7 @@ if uploaded_file:
     avg_conf = float(np.mean(raw_mask[raw_mask > 0.5])) * 100 if nerve_pixels > 0 else 0
 
     # -------------------------
-    # Glass Metric Cards
+    # Metrics
     # -------------------------
     st.markdown(f"""
     <div class="stats-row">
@@ -226,12 +233,21 @@ if uploaded_file:
     </div>
     """, unsafe_allow_html=True)
 
+    # -------------------------
+    # Results Display
+    # -------------------------
     col1, col2 = st.columns(2)
 
     with col1:
-        st.markdown('<div class="result-card"><div class="result-card-title">Original Image</div></div>', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="result-card"><div class="result-card-title">Original Image</div></div>',
+            unsafe_allow_html=True
+        )
         st.image(cv2.cvtColor(img, cv2.COLOR_BGR2RGB), use_container_width=True)
 
     with col2:
-        st.markdown('<div class="result-card"><div class="result-card-title">Nerve Overlay</div></div>', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="result-card"><div class="result-card-title">Nerve Overlay</div></div>',
+            unsafe_allow_html=True
+        )
         st.image(cv2.cvtColor(overlay.astype(np.uint8), cv2.COLOR_BGR2RGB), use_container_width=True)
