@@ -25,7 +25,7 @@ def get_base64_video(video_path):
         data = f.read()
     return base64.b64encode(data).decode()
 
-bg_video_path = os.path.join(os.path.dirname(__file__), "IMG_9619.MP4")
+bg_video_path = os.path.join(os.path.dirname(__file__), "IMG_9619.mp4")
 bg_video_base64 = get_base64_video(bg_video_path)
 
 st.markdown(f"""
